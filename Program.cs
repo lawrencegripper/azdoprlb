@@ -26,6 +26,9 @@ namespace adoprloadbalancer
 
     class Program
     {
+        private const int VoteApprovedConst = 10;
+        private const int NoVoteConst = 0;
+
         static void Main(string[] args)
         {
             if (args.Length == 3)
@@ -37,7 +40,7 @@ namespace adoprloadbalancer
                 // Create a connection
                 VssConnection connection = new VssConnection(orgUrl, new VssBasicCredential(string.Empty, personalAccessToken));
 
-                AssignMissingReviewers(connection, project, targetReviewerCount: 2).Wait();
+                BuildStats(connection, project, targetReviewerCount: 2).Wait();
             }
             else
             {
@@ -46,7 +49,7 @@ namespace adoprloadbalancer
 
         }
 
-        static private async Task AssignMissingReviewers(VssConnection connection, String project, int targetReviewerCount)
+        static private async Task BuildStats(VssConnection connection, String project, int targetReviewerCount)
         {
             var prs = await GetAllActivePRs(connection, project);
 
@@ -67,16 +70,16 @@ namespace adoprloadbalancer
 
                     Console.WriteLine($"Would assign user {reviewerToAssign.UserId} to review {pr.PR.Title}");
 
-                    // Todo: Actually set user on PR
+                    // // Todo: Actually set user on PR
                     
-                    if (pr.Reviewers?.Count() > 0)
-                    {
-                        pr.Reviewers.Add(new IdentityRefWithVote(new IdentityRef { Id = reviewerToAssign.UserId }));
-                    }
-                    else
-                    {
-                        pr.Reviewers = new List<IdentityRefWithVote>() { new IdentityRefWithVote(new IdentityRef { Id = reviewerToAssign.UserId }) };
-                    }
+                    // if (pr.Reviewers?.Count() > 0)
+                    // {
+                    //     pr.Reviewers.Add(new IdentityRefWithVote(new IdentityRef { Id = reviewerToAssign.UserId }));
+                    // }
+                    // else
+                    // {
+                    //     pr.Reviewers = new List<IdentityRefWithVote>() { new IdentityRefWithVote(new IdentityRef { Id = reviewerToAssign.UserId }) };
+                    // }
 
                 }
 
@@ -101,14 +104,22 @@ namespace adoprloadbalancer
         private static Dictionary<string, ReviewersHistory> BuildHistory(IEnumerable<PullRequest> prs)
         {
             var reviewersHistory = new Dictionary<string, ReviewersHistory>();
+            var reviewerNameMap = new Dictionary<string, string>();
+            var prCreators = new Dictionary<string, int>();
 
             // Build history 
             foreach (var pr in prs)
             {
+                if (prCreators.ContainsKey(pr.PR.CreatedBy.DisplayName)) {
+                    prCreators[pr.PR.CreatedBy.DisplayName] = prCreators[pr.PR.CreatedBy.DisplayName]+1;
+                } else {
+                    prCreators[pr.PR.CreatedBy.DisplayName] = 1;
+                }
                 foreach (var reviwer in pr.Reviewers)
                 {
+                    reviewerNameMap[reviwer.Id] = reviwer.DisplayName;
                     // Build `pastReviewCount`
-                    if (pr.PR.Status == PullRequestStatus.Completed)
+                    if (pr.PR.Status == PullRequestStatus.Completed && reviwer.Vote > NoVoteConst)
                     {
                         if (reviewersHistory.ContainsKey(reviwer.Id))
                         {
@@ -141,6 +152,21 @@ namespace adoprloadbalancer
                         }
                     }
                 }
+            }
+
+            Console.WriteLine(prs.Count());
+            
+            Console.WriteLine("PR Reviews by User");
+            var revSorted = reviewersHistory.OrderByDescending(x=>x.Value.PastReviewCount);
+            foreach (var item in revSorted) {              
+                Console.WriteLine($"{item.Value.PastReviewCount}  {(prs.Count() / 100) * item.Value.PastReviewCount}%  {reviewerNameMap[item.Key]}");
+            }
+            
+            Console.WriteLine("PRs Submitted by Author");
+            var prsSorted = prCreators.OrderByDescending(x=>x.Value);
+            var prsTotal = prCreators.Select(x=>x.Value).Sum();
+            foreach (var item in prsSorted) {
+                Console.WriteLine($"{item.Value}  {(prsTotal / 100) * item.Value}%  {item.Key}");
             }
 
             return reviewersHistory;
