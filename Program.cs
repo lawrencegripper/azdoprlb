@@ -159,14 +159,13 @@ namespace adoprloadbalancer
             Console.WriteLine("PR Reviews by User");
             var revSorted = reviewersHistory.OrderByDescending(x=>x.Value.PastReviewCount);
             foreach (var item in revSorted) {              
-                Console.WriteLine($"{item.Value.PastReviewCount}  {(prs.Count() / 100) * item.Value.PastReviewCount}%  {reviewerNameMap[item.Key]}");
+                Console.WriteLine($"{item.Value.PastReviewCount}  {Math.Round(100d / (prs.Count()) * item.Value.PastReviewCount, 0)}%  {reviewerNameMap[item.Key]}");
             }
             
             Console.WriteLine("PRs Submitted by Author");
             var prsSorted = prCreators.OrderByDescending(x=>x.Value);
-            var prsTotal = prCreators.Select(x=>x.Value).Sum();
             foreach (var item in prsSorted) {
-                Console.WriteLine($"{item.Value}  {(prsTotal / 100) * item.Value}%  {item.Key}");
+                Console.WriteLine($"{item.Value}  {Math.Round((100d / prs.Count()) * item.Value, 0)}%  {item.Key}");
             }
 
             return reviewersHistory;
